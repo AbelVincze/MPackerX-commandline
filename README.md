@@ -39,15 +39,15 @@ The decompression routine is also included
 
 This compression is optimized for 1 bit graphics data, and small data sizes <64K
 
-Unpacking mechanism
+MPacker9o unpacking mechanism
 
-Source data (compressed) is read by bytes in linear order forward -> 0, 1, 2, 3,... n-1, n.
-Target data (decompressed) is also reproduced in linear order forward. The written data is
+Source data (compressed) is read by bytes in linear incrementing order -> 0, 1, 2, 3,... n-1, n.
+Target data (decompressed) is also reproduced in linear incrementing order. The written data is
 composed of BLOCKs, that can be either STREAMs or REPEATs. STREAMs are series of uncompressed
-bytes copied from the Source data, and REPEATs are copies of the previously written data,
+bytes copied from the Source data (compressed), and REPEATs are copies of the previously written data (uncompressed),
 optionally inverted (NEG).
 
-3 types of informations are stored in the compressed data (source data):
+3 types of information are stored in the compressed data (source data):
 ```
 - setup data:     byte and bit informations how to handle compressed data.
 - data bytes:     original content to be copied.
@@ -63,7 +63,7 @@ how to read/write data. These control bits (one or more) are the following:
 - n BIT VALUE     n bits:   binary value
 ```
 To allow linear read of source data bytes while variable bitlength data needs to be inserted
-in the data flow, the control bits are always read by bytes, 8 at a time, and cached. When
+in the data flow, the control bits are always read by bytes, 8 control bits at a time, and cached. When
 the cache runs out of bits, a new byte is read into it.
 
 * Some words about the variable bitlength values (VBV)
