@@ -1,5 +1,5 @@
 # MPackerX-commandline
-Small bitmap compression commandline tool
+Small bitmap compression/decompression commandline tool
 
 MPackerX is the result of series of packer algorythmes i created with the goal to make my game remake as small as possible.
 This game uses 1bit bitmap graphics, and the main target platform is old Macs (68k).
