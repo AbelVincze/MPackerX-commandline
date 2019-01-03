@@ -12,11 +12,7 @@ As an additional Repository, i made a Mac OS X GUI app using the same algorythm,
 
 Using the included makefile, a bin folder is expected in you user/home folder, where a copy is made to allow instant usage of the compiled executable
 
--list1
--list2
--list3
-
-USAGE: mpackerx [options] <inputfile> [-O <outputfile>]
+'''USAGE: mpackerx [options] <inputfile> [-O <outputfile>]
 
 OPTIONS:
 -W	Source bitmap Byte Width
@@ -32,5 +28,6 @@ OPTIONS:
 -b	Use mpacker9o compression (for 188B m68k ASM unpack tool)
 -t	Try different M values
 -u	Unpack
+'''
 
 If no output file is set, the result will be printed on the standard output in hexdump format
