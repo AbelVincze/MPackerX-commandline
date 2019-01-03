@@ -34,7 +34,7 @@ OPTIONS:
 If no output file is set, the result will be printed on the standard output in hexdump format
 
 
-##68k ASM version
+## 68k ASM version
 The decompression routine is also included
 
 This compression is optimized for 1 bit graphics data, and small data sizes <64K
