@@ -49,9 +49,9 @@ optionally inverted (NEG).
 
 3 types of informations are stored in the compressed data (source data):
 ```
-- setup data:		  byte and bit informations how to handle compressed data.
-- data bytes:		  original content to be copied.
-- control bits:		an array of bit, containing unpacking flow, they describes the BLOCKs
+- setup data:     byte and bit informations how to handle compressed data.
+- data bytes:     original content to be copied.
+- control bits:   an array of bit, containing unpacking flow, they describes the BLOCKs
 ```
 While data bytes are unchanged part of the original content, control bits holds informations
 how to read/write data. These control bits (one or more) are the following:
