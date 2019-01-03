@@ -95,9 +95,9 @@ Setup data:
 2 DB:	Uncompressed Height
 1 DB:	Uncompressed RowBytes	(total uncompressed bytes = Height x RowBytes)
 3 Cb:   3 bit:  CNTBV
-[4 Cb]: 4 bit x (CNTBV+1)	-> CNTVBITS array
+[4 Cb]: 4 bit x (CNTBV+1)   -> CNTVBITS array
 3 Cb:   3 bit:  DISTBV
-[4 Cb]: 4 bit x (DISTBV+1)	-> DISTVBITS array
+[4 Cb]: 4 bit x (DISTBV+1)  -> DISTVBITS array
 ```
 Compressed data:
 Always start with STREAM, and STREAM is always followed by a REPEAT
