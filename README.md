@@ -15,18 +15,18 @@ Using the included makefile, a bin folder is expected in you user/home folder, w
 USAGE: mpackerx [options] <inputfile> [-O <outputfile>]
 
 OPTIONS:
-  -W	Source bitmap Byte Width
-  -H	Source bitmap Pixel Height
-  -O	Output file
-  -b	Use 9bo compression (Default is 9o)
-  -n	Negcheck enabled
-  -d	Vertical read direction
-  -M	Max distance (Default 32767)
-  -L	Max repeated stream length (Default 32767)
-  -m	Maxvars (Default 5)
-  -v	Verbose mode on
-  -b	Use mpacker9o compression (for 188B m68k ASM unpack tool)
-  -t	Try different M values
-  -u	Unpack
+-W	Source bitmap Byte Width
+-H	Source bitmap Pixel Height
+-O	Output file
+-b	Use 9bo compression (Default is 9o)
+-n	Negcheck enabled
+-d	Vertical read direction
+-M	Max distance (Default 32767)
+-L	Max repeated stream length (Default 32767)
+-m	Maxvars (Default 5)
+-v	Verbose mode on
+-b	Use mpacker9o compression (for 188B m68k ASM unpack tool)
+-t	Try different M values
+-u	Unpack
 
 If no output file is set, the result will be printed on the standard output in hexdump format
