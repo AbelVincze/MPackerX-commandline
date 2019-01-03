@@ -15,6 +15,7 @@ Using the included makefile, a bin folder is expected in you user/home folder, w
 USAGE: mpackerx [options] <inputfile> [-O <outputfile>]
 
 OPTIONS:
+
 -W	Source bitmap Byte Width
 -H	Source bitmap Pixel Height
 -O	Output file
