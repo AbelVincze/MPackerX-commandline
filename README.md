@@ -71,9 +71,9 @@ A VBV type is composed from 0 or more SELECTOR bits, and 1 or more VALUE bits (X
 Here are some examples:
 ```
 (A)                                       (B)
-SELECTOR/VALUEBITS  VALUE FINAL VALUE     SELECTOR/VALUEBITS	VALUE	FINAL VALUE
+SELECTOR/VALUEBITS  VALUE FINAL VALUE     SELECTOR/VALUEBITS  VALUE FINAL VALUE
 1XX      3 bits     0-3   0-3             1XXX        4 bits  0-7   0-7
-01XXX    5 bits     0-7   4-11            01XXXXXX    8 bits	0-63  8-71
+01XXX    5 bits     0-7   4-11            01XXXXXX    8 bits  0-63  8-71
 001XXXX  7 bits     0-15  12-27           00XXXXXXXX 10 bits  0-255 72-327
 000XXXXX 8 bits     0-31  28-59
 
