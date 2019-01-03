@@ -70,16 +70,16 @@ the cache runs out of bits, a new byte is read into it.
 A VBV type is composed from 0 or more SELECTOR bits, and 1 or more VALUE bits (X)
 Here are some examples:
 ```
-(A)                                       (B)
-SELECTOR/VALUEBITS  VALUE FINAL VALUE     SELECTOR/VALUEBITS  VALUE FINAL VALUE
-1XX      3 bits     0-3   0-3             1XXX        4 bits  0-7   0-7
-01XXX    5 bits     0-7   4-11            01XXXXXX    8 bits  0-63  8-71
-001XXXX  7 bits     0-15  12-27           00XXXXXXXX 10 bits  0-255 72-327
-000XXXXX 8 bits     0-31  28-59
+(A)                                        (B)
+SELECTOR/VALUEBITS  VALUE  FINAL VALUE     SELECTOR/VALUEBITS  VALUE  FINAL VALUE
+1XX      3 bits     0-3    0-3             1XXX        4 bits  0-7    0-7
+01XXX    5 bits     0-7    4-11            01XXXXXX    8 bits  0-63   8-71
+001XXXX  7 bits     0-15   12-27           00XXXXXXXX 10 bits  0-255  72-327
+000XXXXX 8 bits     0-31   28-59
 
 (C)
-SELECTOR/VALUEBITS  VALUE FINAL VALUE
-XXXX     4 bits     0-15  0-15
+SELECTOR/VALUEBITS  VALUE  FINAL VALUE
+XXXX     4 bits     0-15   0-15
 ```
 The configuration of the VBV can varie depending on the compressed data, so it is stored in
 the setup data, by the following way:
