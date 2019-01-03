@@ -12,9 +12,9 @@ As an additional Repository, i made a Mac OS X GUI app using the same algorythm,
 
 Using the included makefile, a bin folder is expected in you user/home folder, where a copy is made to allow instant usage of the compiled executable
 
-- list1
-- list2
-- list3
+-list1
+-list2
+-list3
 
 USAGE: mpackerx [options] <inputfile> [-O <outputfile>]
 
