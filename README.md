@@ -93,7 +93,7 @@ The compressed data structure:
 Setup data:
 ```
 2 DB:	Uncompressed Height
-1 DB:	Uncompressed RowBytes    (total uncompressed bytes = Height x RowBytes)
+1 DB:	Uncompressed RowBytes   (total uncompressed bytes = Height x RowBytes)
 3 Cb:   3 bit:  CNTBV
 [4 Cb]: 4 bit x (CNTBV+1)      -> CNTVBITS array
 3 Cb:   3 bit:  DISTBV
