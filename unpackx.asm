@@ -2,6 +2,9 @@
 ;
 ; 68k ASM unpacking routine for 68k Mac by Abel Vincze 2018/12/10
 ; This source file is designed to test run in Tricky68k simulator
+;
+; unpackerX is an extended version of the unpacker9o decompression routine.
+; It reads and decompresses files compressed with MPackerX cmd/gui tool.
 
 			code
 			public start    ; Make the entry point public
@@ -18,8 +21,12 @@ start:
 
 			lea		data(PC),a1				; source and
 			lea		OUT(PC),a2				; target address parameters
-			bsr.b	UNPACKX				; decompressing
-
+			bsr.b	UNPACKX					; decompressing
+			; finish unpacking, here we need to rearrange bytes...
+			
+			; CHECK START
+			; from here, we only checks the decompressed data with the included original.
+			; if you implement this routine, just skip this part
 			move.w	#exp-UNPACKX, d7		; code length display...
 			
 			move.w	L(a0), d0				; and finally check the unpacked data
@@ -34,55 +41,55 @@ okloop:
 			bra.b okloop					; All is OK
 errorloop:									
 			bra.b errorloop					; Unpack doesn't match original...
-
+			; CHECK END
 
 UNPACKX:		
-			; Unpack9o 68k ASM -------------------------------------------------------------
+			; UnpackX 68k ASM --------------------------------------------------------------
 			; a0 - locals
 			; a1 - packed data
 			; a2 - output address
 			; used; d0,d1,d2,d3,d4,d5,d6,d7/a3,a4
 			
 											; SETUP DATA
-			move.w  (a1)+, d1
+			move.w  (a1)+, d1				; start reading the compressed data...
 			move.w	d1, H(a0)				; data height	16bit
 			moveq	#0, d0					; clear d0...
 			move.b	(a1)+, d0				; data width	8bit
 			move.b	d0, DW+1(a0)
-			mulu.w	d0, d1					; adathosszusag kiszamolasa a DW es H-bol
+			mulu.w	d0, d1					; uncompressed data lenght calculated from DW*H
 			move.w	d1, L(a0)				; final data length
 			
-			add.l	a2, d1
+			add.l	a2, d1					; add lenght to OUR address to
 			move.l	d1,(a0)					; set end address for finish comp
 			
-			moveq	#0, d5					; clear d5... BITBC!!!
+			moveq	#0, d5					; clear d5... BITBC (control bit counter in buffer)
 
-				moveq	#2, d0					; 3 bitet olvasunk
-				bsr		pullnbits				; eredmeny d1-ben
-				move.b	d1, FLAGS(a0)			; store flags
+				moveq	#2, d0					; 3 bits to read
+				bsr		pullnbits				; read control bits and
+				move.b	d1, FLAGS(a0)			; store in flags (USELOOKUP, NEGCHECK, DIR)
 				btst	#2, d1					; USELOOKUP?
-				beq.b	.skipli
+				beq.b	.skipli					; if we don't use LOOKUP table, just skip this part
 				
-				move.b	(a1)+, d1				; skip LUT entries (as we direct read them)
-				move.l  a1, LUT(a0)			; save LUT addr
-				adda	d1,a1		
+				move.b	(a1)+, d1				; number of LUT entries
+				move.l  a1, LUT(a0)				; save LUT addr
+				adda	d1,a1					; skip LUT entries (as we direct read them later)
 				; restore LIbitdepths
-				moveq	#2, d6					; 3 bitet olvasunk
+				moveq	#2, d6					; 3 bits to read
 				lea		LIbv(PC), a3
-				bsr.b	setupVNV
+				bsr.b	setupVNV				; read and store LIbitdepths entries
 .skipli:
-			moveq	#3, d6					; 4 bitet olvasunk
+			moveq	#3, d6					; 4 bits to read
 			; restore CNTbitdepths
 			lea		CNTbv(PC), a3
-			bsr.b	setupVNV
+			bsr.b	setupVNV				; read and store CNTbitdepths entries
 
 			; restore DISTbitdepths
 			lea 	DISTbv(PC), a3
-			bsr.b	setupVNV
+			bsr.b	setupVNV				; read and store DISTbitdepths entries
 			
 			; INIT unpack loop: isStream to true for starting
-			;moveq	#1, d3					; isStream = 1	; nem kell kulon beallitani!
-											; lehetne bra.b .isstream is, de d7-et jobb nullazni
+			;moveq	#1, d3					; isStream = 1	; don't need to set up, as it is not zero
+											; setupVNV has left it -1.W
 			
 			; UNPACK data ------------------------------------------------------------------
 											; unpack mainloop
@@ -95,25 +102,25 @@ unpackloop:
 			
 .isrepeat:	
 			; REPEAT BLOCK 
-			bsr.b	pullbit					; next?
-			roxl.b	#1,d3					; set isStream true!
+			bsr.b	pullbit					; next block?
+			roxl.b	#1,d3					; set the read bit in isStream  
 			
-			bsr.b	pullDISTbits			; d1-ben az eredmeny pozicio
-			movea.l	a2, a3
-			suba.w	d1, a3					; a3-ban a masolas forrasa
+			bsr.b	pullDISTbits			; read distance, and store in d1
+			movea.l	a2, a3					; copy write address to a3
+			suba.w	d1, a3					; substract distance, and save as source of copy in a3
 
-			bsr.b	pullCNTbits				; d1-ben az eredmeny:	adathosszusag
-			addq.w	#mmchl, d1				; javitjuk
+			bsr.b	pullCNTbits				; read counter, result in d1
+			addq.w	#mmchl, d1				; fix it
 
-				btst	#1,Flags(PC)		; feltetelesse kell tenni NEGCHK
-				beq.b	.repeatloop
+				btst	#1,Flags(PC)		; NEGCHECK (do the compressed data contains NEGCHK bits?)
+				beq.b	.repeatloop			; if no, just skip to the copy part
 				
-			bsr.b	pullbit					; is neg?
-			bcs.b	.repeatnegloop
+			bsr.b	pullbit					; read bit: NEG
+			bcs.b	.repeatnegloop			; if NEG is set, we have an inverted block, skip there
 			
 .repeatloop:
-			move.b	(a3)+, (a2)+			; copy the repeated stream;
-			dbra	d1, .repeatloop
+			move.b	(a3)+, (a2)+			; copy the repeated stream
+			dbra	d1, .repeatloop			; (read from the already decompressed data)
 			bra.b	unpackloop
 
 .repeatnegloop:
@@ -122,77 +129,78 @@ unpackloop:
 			dbra	d1, .repeatnegloop
 			bra.b	unpackloop
 
-			; finish unpacking, here we need to rearrange bytes...
+			
 .isstream:
 			; STREAM BLOCK
-			bsr.b		pullCNTbits				; d1-ben az eredmeny
+			bsr.b		pullCNTbits			; read counter, result in d1
 				btst	#2,Flags(PC)			; USELOOKUP?
-				bne.b	.lcopy
+				bne.b	.lcopy			
 .copyloop:
 			move.b	(a1)+, (a2)+			; copy the stream;
 			dbra	d1, .copyloop
 			bra.b	.copyend				; d3 nulla, tehat nem stream a kovetkezo
 .lcopy
-				move.w	d1, d3
-				move.l	Lut(PC), a3
+				move.w	d1, d3					; LOOKUP table is used, store counter in d3
+				move.l	Lut(PC), a3				; get LOOKUP table address, and store in a3
 .lcopyloop:
-				bsr.b	pullLIbits				; d1-ben az eredmeny
-				move.b	(a3,d1), (a2)+
-				dbra	d3, .lcopyloop
+				bsr.b	pullLIbits				; read LOOKUP table index
+				move.b	(a3,d1), (a2)+			; read byte from LOOKUP table and 
+				dbra	d3, .lcopyloop			; repeat until counter=-1
 .copyend:				
-				moveq	#0,	d3					; nullazzuk a streamet
-				bra.b	unpackloop
+				moveq	#0,	d3					; set next block as repeat!
+				bra.b	unpackloop				
 
 	
 			; HELPER FUNCTIONS -------------------------------------------------------------
-setupVNV:
-			moveq	#2, d0
-			bsr.b 	pullnbits				; d1-be vissza! d0,d2,d3 maradjon!
-			move.w	d1,d3					; d3- counter
-			move.b	d1, (a3)+			
+setupVNV:									; input d6 = bitlength of the entries
+											; a3 = address of the bitdepths array
+			moveq	#2, d0					; setup bitdepths table 
+			bsr.b 	pullnbits				; 3 bits to read, result in d1 (number of bitdepths entries)
+			move.w	d1,d3					; save as counter for the read loop
+			move.b	d1, (a3)+				; store also in the first entry of our array
 .loop:
-			move.w	d6, d0					; 4 bitet olvasunk
-			bsr.b	pullnbits
-			move.b	d1, (a3)+
+			move.w	d6, d0					; bits to read
+			bsr.b	pullnbits				; get that number of bits
+			move.b	d1, (a3)+				; store in the array
 			dbra	d3,	.loop
 __rts__:	rts
 			
-pullbit:									; used global(!) d5/d4
-			; pull 1 control bit
+pullbit:									; used global(!) d5/d4 (Bitcounter, buffer)
+											; pull 1 control bit
 			tst.b	d5						; bit counter
 			bne.b	.next
 			moveq	#8, d5					; reset bitcounter
 			move.b	(a1)+, d4				; if 0, get a new byte to the buffer
 .next
 			subq.b	#1, d5					; decrement counter
-			roxl.b	d4	
-			rts
+			roxl.b	d4						; read a bit from the buffer
+			rts								; result in X/C
 
 pullDISTbits:
-			lea		DISTbv(PC), a4
+			lea		DISTbv(PC), a4			; address of the DISTbitdepths array in a4
 			bra.b	pulldatabits			; continue
 			
 pullCNTbits:
-			lea		CNTbv(PC), a4
+			lea		CNTbv(PC), a4			; address of the CNTbitdepths array in a4
 				bra.b	pulldatabits			; continue
 
 pullnbits:									; inputd0 = n, used d6, out d1
-			; pull N control bits
-			moveq	#0, d1
+											; pull N number of control bits
+			moveq	#0, d1					; clear result reg
 .loop
-			bsr.b	pullbit
-			addx.w	d1,d1
+			bsr.b	pullbit					; pull a bit from buffer
+			addx.w	d1,d1					; push it to the result
 			dbra	d0, .loop
 			addq.w	#1, d0					; to clear w bits
 			rts
 
 			
 pullLIbits:
-				lea		LIbv(PC), a4			
+				lea		LIbv(PC), a4		; address of the LIbitdepths array in a4	
 pulldatabits:								; get the number with the selected format (CNT/DIST bits)
 											; change: d0,d1/a4 (uses: d0,d1,d2,d6,d7/a4
 			moveq	#0, d6					; clear for safety
-			move.b	(a4)+,d6				; d6 length of bit table, a4 bit table
+			move.b	(a4)+,d6				; d6 length of bitdepths array, a4 bitdepths array (first entry is the length)
 			moveq	#0, d2					; d2 index in the table vbit
 			moveq	#0, d7		 			; fix = 0
 			bra.b	.loopin					; enter point of the loop
@@ -204,12 +212,13 @@ pulldatabits:								; get the number with the selected format (CNT/DIST bits)
 			addq.w	#1, d2					; vbit++
 .loopin
 			move.b	(a4,d2), d0				; d0 actbits			
-			dbra	d6, .loop				; kovetkezo bit;
+			dbra	d6, .loop				; next bit
 .read
 			bsr.b	pullnbits				; d0-ban actbits, d1-ben eredmeny
 			add.w	d7, d1
 			rts
-
+			
+			; table for quick fix
 exp:		dc.w	2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768			
 	
 	
@@ -222,7 +231,7 @@ Lut:		dc.l	0
 dw:			dc.w	0
 h:			dc.w	0
 l:			dc.w	0
-CNTbv:		dc.b	0							; fontos az elrendezes!!!
+CNTbv:		dc.b	0						; order is important
 CNTbits:	dc.b	0, 0, 0, 0, 0, 0, 0, 0
 DISTbv:		dc.b	0
 DISTbits:	dc.b	0, 0, 0, 0, 0, 0, 0, 0
@@ -567,7 +576,7 @@ OUT:	ds.b $A000
 
 ;	This compression is optimized for 1 bit graphics data, and small data sizes <64K
 ;
-;	Unpacking mechanism
+;	Unpacking mechanism 9o
 ;
 ;	Source data (compressed) is read by bytes in linear order forward -> 0, 1, 2, 3,... n-1, n.
 ;	Target data (decompressed) is also reproduced in linear order forward. The written data is
