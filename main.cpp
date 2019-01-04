@@ -4,22 +4,9 @@
 #include <cstring>	// for linux
 #include <chrono>
 #include <algorithm>
-//#include <iomanip>
 
-//mpackerx __c64font2 -W 16 -dnl -M 98 -L 64
-//mpackerx __32x112_tmirror_\(walls\) -W 4 -d -M 7000 -L 341
-//mpackerx __48x48_alpha_tmirror_\(sprites\) -O __48x48_alpha_tmirror_\(sprites\).pkx -W 12 -M 3456 -dlv
-/*
+//mpackerx __c64font -W 16 -M 96 -L 84 -dnlv 
 
- To do:
- - file save
- - unpack
- - options for testing
- - finalize parameters, variables
- - help
- - polish verbose output
-
-*/
 
 using namespace std;
 
