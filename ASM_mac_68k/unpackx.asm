@@ -253,7 +253,7 @@ LIBITS:		equ		LIbits	-locals
 FLAGS:		equ		Flags	-locals
 LUT:		equ		Lut		-locals
 
-			org $3000
+			org $4000
 	
 data:
 ; __c64font2_packedx	mpackerx __c64font2 -dln -W 16 -M 96 -L 63 -vb
