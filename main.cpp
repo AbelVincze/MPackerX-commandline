@@ -243,7 +243,7 @@ void displayHelp() {
 			"  -W\tSource bitmap Byte Width\n"
 			"  -H\tSource bitmap Pixel Height\n"
 			"  -O\tOutput file\n"
-			"  -b\tUse 9bo compression (Default is 9o)\n"
+			"  -l\tUse lookup table\n"
 			"  -n\tNegcheck enabled\n"
 			"  -d\tVertical read direction\n"
 			"  -M\tMax distance (Default 32767)\n"
@@ -504,7 +504,7 @@ void munpack() {
 	/*
 		Do reorder here
 	*/
-	if( DIR ) {
+	if( false ) {
 		char* rdata = (char*) malloc(expsize);
 		if(!rdata) { cout << "Memory Allocation Failed"; return; }
 		memset(rdata, 0, expsize);
