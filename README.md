@@ -22,6 +22,7 @@ OPTIONS:
 -H	Source bitmap Pixel Height
 -O	Output file
 -b	Use 9bo compression (Default is 9o)
+-l	Use lookup table
 -n	Negcheck enabled
 -d	Vertical read direction
 -M	Max distance (Default 32767)
