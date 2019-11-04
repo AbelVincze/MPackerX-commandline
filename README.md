@@ -12,8 +12,6 @@ As an additional Repository, i made a Mac OS X GUI app using the same algorythm,
 
 Using the included makefile, a bin folder is expected in you user/home folder, where a copy is made to allow instant usage of the compiled executable
 
-(!) To a nicer view of my codes, add the ?ts=4 param to the URL of the source files.
-
 ```
 USAGE: mpackerx [options] <inputfile> [-O <outputfile>]
 
