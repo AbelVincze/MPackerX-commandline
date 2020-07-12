@@ -718,7 +718,7 @@ void mpack() {
 		blocks[blkcount++] = (blockdata){ false, repeats[r].L, T, repeats[r].SRC, repeats[r].N };
 		prevend = T+repeats[r].L;
 	}
-	cout << +prevend << " vs. " << +l << "\n";
+	//cout << +prevend << " vs. " << +l << "\n";
 	if( prevend<l ) blocks[blkcount++] = (blockdata){ true, l-prevend, prevend };
 
 	free(repeats);	// as we don't need the repeats anymore, everything is in blocks now
