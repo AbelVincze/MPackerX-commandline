@@ -955,12 +955,11 @@ void mpack() {
 	
 	}
 	
-/*
+	/*
 	console.log("dist bits: "+tdl );
 	console.log("CNT bits:  "+tcnt );
-	var pdl = Math.ceil( pdbit/8 );			// The length of the pack data
-	
-*/	
+	var pdl = Math.ceil( pdbit/8 );			// The length of the pack data	
+	*/	
 
 	if( force_hex || (!haveoutfile && !trying) ) hexdump( pdata, bout );	// print result as hexdump
 	if( v_mode ) {
