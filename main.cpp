@@ -11,7 +11,7 @@
 using namespace std;
 
 const int			maxpatterns = 8;
-const int			mmchl		= 4;	// minimal size for repeats...
+const int			mmchl		= 4;		// minimal size for repeats...
 
 char*				infile;					// input file name
 char*				outfile;				// output file name
