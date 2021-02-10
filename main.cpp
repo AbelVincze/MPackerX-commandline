@@ -668,12 +668,12 @@ void mpack() {
 				chp++;
 			}
 			if( chp>=mmchl && best.L<chp ) {
-				best = (repeatdata){ chp, chbin, bin, false };
+				best = (repeatdata){ (short unsigned int)chp, (short unsigned int)chbin, (short unsigned int)bin, false };
 			} else if( NEGCHECK ) {
 				chp = 0;
 				while( chp<maxchecklength && (unsigned char)data[ bin+chp ] == 255-(unsigned char)data[ chbin+chp ] ) { chp++; }
 				if( chp>=mmchl && best.L<chp ) {
-					best = (repeatdata){ chp, chbin, bin, true };
+					best = (repeatdata){ (short unsigned int)chp, (short unsigned int)chbin, (short unsigned int)bin, true };
 				}
 			}
 			chbin--;
@@ -714,12 +714,12 @@ void mpack() {
 	
 	for( int r=0; r<repcount; r++ ) {
 		T = repeats[r].T;
-		if( prevend<T ) blocks[blkcount++] = (blockdata){ true, T-prevend, prevend };
+		if( prevend<T ) blocks[blkcount++] = (blockdata){ true, (short unsigned int)(T-prevend), prevend };
 		blocks[blkcount++] = (blockdata){ false, repeats[r].L, T, repeats[r].SRC, repeats[r].N };
 		prevend = T+repeats[r].L;
 	}
 	//cout << +prevend << " vs. " << +l << "\n";
-	if( prevend<l ) blocks[blkcount++] = (blockdata){ true, l-prevend, prevend };
+	if( prevend<l ) blocks[blkcount++] = (blockdata){ true, (short unsigned int)(l-prevend), prevend };
 
 	free(repeats);	// as we don't need the repeats anymore, everything is in blocks now
 	repeats = NULL;
