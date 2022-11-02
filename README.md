@@ -32,7 +32,7 @@ OPTIONS:
 -u	Unpack
 ```
 
-If no output file is set, the result will be printed on the standard output in hexdump format
+If no output file is set, the result will be printed on the standard output as hexdump
 
 
 ## 68k ASM version
