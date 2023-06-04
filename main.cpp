@@ -6,7 +6,13 @@
 #include <algorithm>
 
 // mpackerx __c64font -W 16 -M 96 -L 84 -dnlv 
+/*
+	Code signing...
 
+	sudo spctl --master-disable
+	codesign --force --deep --sign - ~/bin/mpackerx
+	sudo spctl --master-enable
+*/
 
 using namespace std;
 
@@ -29,6 +35,7 @@ bool				NEGCHECK	= false;	// check for inverse
 bool				USELOOKUP	= false;	// create lookup table
 int					maxvars		= 5;		// max pattern length
 bool				trying		= false;	// try different length
+bool				text        = false;	// text mode
 bool				unpack		= false;	// unpack file
 
 char hexnum[17] = "0123456789ABCDEF";
@@ -41,7 +48,7 @@ unsigned short int	anbits[16]	= { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2
 int					bitpos;
 int					bitbuff;
 
-char*				data;			// loaded data
+char*				ldata;			// loaded data
 char*				pdata;			// packed data
 
 typedef struct {
@@ -186,7 +193,13 @@ int parseArgs(int argc, char* argv[]) {
 					case 'd':	DIR=true;		break;
 					case 'v':	v_mode=true;	break;
 					case 'b':	b_mode=true;	break;
-					case 't':	trying=true;	break;
+					case 'x':	trying=true;	break;
+					case 't':
+						USELOOKUP=true;
+						NEGCHECK=false;
+						DIR=false;
+						text=true;
+						break;
 					case 'u':	unpack=true;	break;
 					case 'n':	NEGCHECK=true;	break;
 					case 'l':	USELOOKUP=true;	break;
@@ -251,7 +264,8 @@ void displayHelp() {
 			"  -m\tMaxvars (Default 5)\n"
 			"  -v\tVerbose mode on\n"
 			"  -b\tUse mpacker9o compression (for 188B m68k ASM unpack tool)\n"
-			"  -t\tTry different M values\n"
+			"  -x\tTry different M values\n"
+			"  -t\tText mode (16MB file size limit)\n"
 			"  -u\tUnpack\n"
 			"\nIf no output file is set, the result will be printed on the standard output in hexdump format\n";
 }
@@ -408,9 +422,9 @@ void munpack() {
 	cout << "H:  " << +H << "\n";
 	cout << "Expsize: " << +expsize << "\n";
 	
-	data = (char*) malloc(expsize);
-	if(!data) { cout << "Memory Allocation Failed"; return; }
-	memset(data, PAD, expsize);
+	ldata = (char*) malloc(expsize);
+	if(!ldata) { cout << "Memory Allocation Failed"; return; }
+	memset(ldata, PAD, expsize);
 
 	if( !b_mode ) {
 		USELOOKUP = pullbit()==1;
@@ -485,7 +499,7 @@ void munpack() {
 			//cout << dec << +bout << " - STCNT: " << +stcnt << "\n";
 			for( int i=0; i<=stcnt; i++ ) {
 				b = USELOOKUP? rlookup[ pulldatabits( LIbitdepths, LIbitdepthscount ) ]: pdata[ bin++ ];
-				if( bout<expsize ) data[ bout++ ]=b;	//b
+				if( bout<expsize ) ldata[ bout++ ]=b;	//b
 			}
 			isStream = false;
 		} else {
@@ -496,7 +510,7 @@ void munpack() {
 			L = pulldatabits( CNTbitdepths, CNTbitdepthscount )+mmchl;
 			neg = NEGCHECK? pullbit(): 0;
 			for( int i=0; i<L; i++ ) {
-				data[ bout++ ] = ( neg? 255-data[ src++ ]: data[ src++ ] );
+				ldata[ bout++ ] = ( neg? 255-ldata[ src++ ]: ldata[ src++ ] );
 			}
 		}
 	}
@@ -511,19 +525,19 @@ void munpack() {
 		
 		for( int y=0; y<H; y++ ) {
 			for( int x=0; x<BW; x++ ) {
-				rdata[x+y*BW] =  data[x*H+y];
+				rdata[x+y*BW] =  ldata[x*H+y];
 			}		
 		}
-		free(data);
-		data = rdata;
+		free(ldata);
+		ldata = rdata;
 		
 	}
 
-	if( force_hex || !haveoutfile )  hexdump( data, bout );	// print result as hexdump
+	if( force_hex || !haveoutfile )  hexdump( ldata, bout );	// print result as hexdump
 	
-//	return data;
+//	return ldata;
 
-	free(data);
+	free(ldata);
 	free(pdata);
 
 }
@@ -568,13 +582,19 @@ void mpack() {
 	
 	filesize = (unsigned int)myFile.tellg();
 
+	if( text ) BW=1;
+
 	if( H==0 ) { // default setting	
 		H = ceil((float)filesize/BW);
 	}
 	expsize = BW*H;
 	
-	if( filesize>0xFFFF ) {
-		cout << "File size too large: max 65535 bytes\n";
+	if( !textmode && filesize>0xFFFF ) {
+		cout << "File size too large: max 0xFFFF bytes\n";
+		return;
+	}
+	if( textmode && filesize>0xFFFFFF ) {
+		cout << "File size too large: max 0xFFFFFF bytes\n";
 		return;
 	}
 	if( expsize>filesize ) {
@@ -593,9 +613,9 @@ void mpack() {
 	}
 	
 	// Make the buffer
-	data = (char*) malloc(expsize);
-	if(!data) { cout << "Memory Allocation Failed"; return; }
-	memset(data, PAD, expsize);
+	ldata = (char*) malloc(expsize);
+	if(!ldata) { cout << "Memory Allocation Failed"; return; }
+	memset(ldata, PAD, expsize);
 
 	// Copy data with the right order
 	if( DIR ) {
@@ -610,14 +630,14 @@ void mpack() {
 		for( int y=0; y<H; y++ ) {
 			for( int x=0; x<BW; x++ ) {
 				myFile.read(&buffer, 1);
-				data[x*H+y] = buffer;
+				ldata[x*H+y] = buffer;
 			}		
 		}
 		
 	} else {
 		// just copy data to the buffer;
 		myFile.seekg(0);
-		myFile.read(data, filesize);
+		myFile.read(ldata, filesize);
 	}
 	
 	// Close the file, we do not need it anymore.
@@ -663,7 +683,7 @@ void mpack() {
 		while( chbin>=(bin-maxcheckdist) ) {
 			chp = 0;		// check position
 		
-			while( chp<maxchecklength && (unsigned char)data[ bin+chp ] == (unsigned char)data[ chbin+chp ] ) {
+			while( chp<maxchecklength && (unsigned char)ldata[ bin+chp ] == (unsigned char)ldata[ chbin+chp ] ) {
 				// ismetlodest talaltunk.
 				chp++;
 			}
@@ -671,7 +691,7 @@ void mpack() {
 				best = (repeatdata){ (short unsigned int)chp, (short unsigned int)chbin, (short unsigned int)bin, false };
 			} else if( NEGCHECK ) {
 				chp = 0;
-				while( chp<maxchecklength && (unsigned char)data[ bin+chp ] == 255-(unsigned char)data[ chbin+chp ] ) { chp++; }
+				while( chp<maxchecklength && (unsigned char)ldata[ bin+chp ] == 255-(unsigned char)ldata[ chbin+chp ] ) { chp++; }
 				if( chp>=mmchl && best.L<chp ) {
 					best = (repeatdata){ (short unsigned int)chp, (short unsigned int)chbin, (short unsigned int)bin, true };
 				}
@@ -757,7 +777,7 @@ void mpack() {
 		for( int bl=0; bl<blkcount; bl++ ) {
 			if( blocks[bl].ST == true ) {	// it's a stream, so copy bytes...
 				for( int i=0; i<blocks[bl].L; i++ ) {
-					n = data[ bin++ ];
+					n = ldata[ bin++ ];
 					bc[n].C++;
 				}
 				LIrefs += blocks[bl].L;
@@ -934,7 +954,7 @@ void mpack() {
 		if( blocks[bl].ST == true ) {	// it's a stream, so copy bytes...
 			tcnt += pushdatabits( CNTbitdepths, CNTbitdepthscount, blocks[bl].L-1 );
 			for( int i=0; i<blocks[bl].L; i++ ) {
-				n = (unsigned char)data[ bin++ ];
+				n = (unsigned char)ldata[ bin++ ];
 				if( USELOOKUP ) pushdatabits( LIbitdepths, LIbitdepthscount, lookup[ n ]);
 				else pdata[ bout++ ] = n;
 			}
@@ -991,7 +1011,7 @@ void mpack() {
 	}
 
 
-	free(data);
+	free(ldata);
 
 }
 
