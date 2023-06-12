@@ -2,3 +2,5 @@
 .DS_Store
 ASM_mac_68k/unpackx_diff_test_data.asm
 .DS_Store
+test.wasm.gz
+test.js

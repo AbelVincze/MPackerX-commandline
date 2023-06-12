@@ -4,6 +4,7 @@
 #include <cstring>	// for linux
 #include <chrono>
 #include <algorithm>
+//#include <emscripten.h>
 
 // mpackerx __c64font -W 16 -M 96 -L 84 -dnlv 
 /*
@@ -569,6 +570,7 @@ void hexdump( char data[], int count ) {
 	
 }
 
+//EMSCRIPTEN_KEEPALIVE
 void mpack() {
 
 	unsigned int	filesize = 0;
@@ -589,11 +591,11 @@ void mpack() {
 	}
 	expsize = BW*H;
 	
-	if( !textmode && filesize>0xFFFF ) {
+	if( !text && filesize>0xFFFF ) {
 		cout << "File size too large: max 0xFFFF bytes\n";
 		return;
 	}
-	if( textmode && filesize>0xFFFFFF ) {
+	if( text && filesize>0xFFFFFF ) {
 		cout << "File size too large: max 0xFFFFFF bytes\n";
 		return;
 	}
