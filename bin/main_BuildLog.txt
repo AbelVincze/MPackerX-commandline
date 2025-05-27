@@ -1,0 +1,17 @@
+Output dir: /Users/macc/dev/MPackerX-commandline/bin
+parsing
+Got 91 errors and 0 warnings while executing:
+  (/Users/macc/dev/MPackerX-commandline/main.cpp 1:1) Error: Unknown preprocessor directive #include
+  (/Users/macc/dev/MPackerX-commandline/main.cpp 2:1) Error: Unknown preprocessor directive #include
+  (/Users/macc/dev/MPackerX-commandline/main.cpp 3:1) Error: Unknown preprocessor directive #include
+  (/Users/macc/dev/MPackerX-commandline/main.cpp 4:1) Error: Unknown preprocessor directive #include
+  (/Users/macc/dev/MPackerX-commandline/main.cpp 5:1) Error: Unknown preprocessor directive #include
+  ...
+
+#include <iostream>
+^
+
+Error: Unknown preprocessor directive #include
+at line 1, column 1 in main.cpp
+
+
