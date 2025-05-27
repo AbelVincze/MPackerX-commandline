@@ -1,5 +1,19 @@
 // munpackerX, c64 version, kickAssembler syntax
 
+
+*=$03DD "BSS" virtual 
+ENDa:       .word  0
+dw:         .byte  0
+h:          .word  0
+l:          .word  0
+CNTbv:      .byte  0 	// order is important
+CNTbits:    .byte  0, 0, 0, 0, 0, 0, 0, 0
+DISTbv:     .byte  0
+DISTbits:   .byte  0, 0, 0, 0, 0, 0, 0, 0
+LIbv:		.byte  0
+LIbits:		.byte  0, 0, 0, 0, 0, 0, 0, 0
+Flags: 		.byte  0 	// 1: DIR, 2: NEGCHECK, 4: USELOOKUP
+
 			*=$0801 "basic startup"
 
 			// basic start line
@@ -94,7 +108,7 @@ UNPACKX:   // unpacking pakerX packages
 			sta dw              // byte width
 			tax
 
-!loop:		lda l               // calc length
+!loop:		lda l               // calc length (l*h)
 			clc
 			adc h
 			sta l
@@ -125,14 +139,13 @@ UNPACKX:   // unpacking pakerX packages
 				lda pbin+1
 				sta LUT+2
 				txa
+				bne !skip+
+				inc pbin+1 		// ha 0, akkor 256 !
+!skip:						
 				clc
 				adc pbin
 				sta pbin
 				lda #0
-				cpx #0
-				bne !skip+
-				lda #1
-!skip:			
 				adc pbin+1
 				sta pbin+1
 				lda #<LIbv
@@ -156,9 +169,7 @@ skipli:
 			// UNPACK data ------------------------------------------------------------------
 			// unpack mainloop
 unpackloop:
-
-			// is finished?
-			lda bout+1
+			lda bout+1 			// is finished?
 			cmp boend+1
 			bcc ulcont
 			lda bout
@@ -169,17 +180,18 @@ unpackloop:
 ulcont:
 			lda isStream
 			beq Repeat
-Stream:
-			dec isStream // next block will be REPEAT
-			jsr pullCNTbits
+
+Stream:		// STREAM --------------------------------------------
+			dec isStream 		// next block will be REPEAT
+			jsr pullCNTbits 	// read data length
 				lda Flags
-				and #$04
+				and #$04 		// USELOOKUP?
 				bne slcopy
 sloop:
-			jsr getAbyte
-			jsr setAbyte
+			jsr getAbyte 		// copy from packed data
+			jsr setAbyte 		// the stream isn't packed
 
-			lda bits
+			lda bits 			// * 16 bit arithmetic *
 			bne n0
 			lda bits+1
 			beq unpackloop
@@ -194,20 +206,16 @@ slcopy:
 			sta licnt+1
 
 slloop:
-				jsr pullLIbits
+
+				lda #<LIbv
+				ldx #>LIbv
+				jsr pulldatabits  // Rear variable lenght "byte"
 				ldy bits
-
-
-			// pullLIbits
-			// slcopyloop:
-			// 		read byte from lookup table
-			// counter decrement, bne slcopyloop
-			// 
 LUT:
-				lda $FFFF,y
-				jsr setAbyte
+				lda $FFFF,y 	// Address set up at LUT init
+				jsr setAbyte 	// the stream is packed
 
-			lda licnt
+			lda licnt 			// * 16 bit arithmetic *
 			bne ln0
 			lda licnt+1
 			beq unpackloop
@@ -215,17 +223,16 @@ LUT:
 ln0:        dec licnt
 			jmp slloop
 
-
-Repeat:
-
-			//rts
+Repeat:		// REPEAT --------------------------------------------
 			jsr pullbit
 			lda #0
 			adc #0
 			sta isStream
 
-			jsr pullDISTbits
-			lda bout
+			lda #<DISTbv
+			ldx #>DISTbv
+			jsr pulldatabits
+			lda bout 			// * 16 bit arithmetic *
 			sec
 			sbc bits
 			sta tbin
@@ -234,30 +241,29 @@ Repeat:
 			sta tbin+1
 
 			jsr pullCNTbits
-			clc
-			lda bits
+			clc 				// * 16 bit arithmetic *
+			lda bits 			// ezt a reszt modositjuk, hogy ne kelljen mar ennyit matekozni
 			adc #mmchl
 			sta bits
 			bcc r3
 			inc bits+1
 r3:			ldy #0
 			
-				lda Flags
+				lda Flags 		// NEGCHECK?
 				and #$02
 				beq r1
 
 			jsr pullbit
-			ldx #0
+			lda #0
 			bcc r1
-			dex
-
-r1:        stx tmp
+			lda #$ff
+r1:         sta tmp
 repeatloop:
 			
 			lda (tbin),y
 			eor tmp
 			sta (bout),y
-			iny
+			iny 				// * 16 bit arithmetic *
 			bne r0
 			inc tbin+1
 			inc bout+1
@@ -266,7 +272,7 @@ r0:         cpy bits
 			dec bits+1
 			bpl repeatloop
 			tya
-			clc
+			clc 				// * 16 bit arithmetic *
 			adc bout
 			sta bout
 			bcc r2
@@ -276,7 +282,6 @@ r2:
 
 			//---------------------------------------------------------------------
 			// HELPER FUNCTIONS
-
 setupnv:
 			sty snvx+1
 			sta tmp
@@ -298,25 +303,27 @@ schk:       cpy #0
 			bne sloop1
 			rts
 
-getAbyte:   sty tmpY       // save y
+getAbyte: 	// read a byte from the packed data
+			sty tmpY       		// save y
 			ldy #0
 			lda (pbin),y
-			inc pbin
+			inc pbin 			// * 16 bit arithmetic *
 			bne end
 			inc pbin+1
 end:        ldy tmpY
 			rts   
 
-setAbyte:   sty tmpY        // save y
+setAbyte:	// write a byte to the target memory 
+			sty tmpY        	// save y
 			ldy #0
 			sta (bout),y
-			inc bout
+			inc bout 			// * 16 bit arithmetic *
 			bne sbend
 			inc bout+1
 sbend:      ldy tmpY
 			rts   
 
-pullbit:
+pullbit: 	// pull a single bit from the packed data
 			sty tmpY2
 			ldy bitbc
 			bne next
@@ -326,15 +333,13 @@ pullbit:
 next:
 			dey
 			sty bitbc
-            ldy tmpY2
+			ldy tmpY2
 			rol BITBUFF
 			rts
  
-pullnbits:
+pullnbits:  // pull N bits from the packed data
 			// x-ben a bitek szama
-			stx end2+1        // save x
-			tya
-			pha
+			stx end2+1          // save X, no need to save Y
 			lda #0
 			sta bits
 			sta bits+1
@@ -343,23 +348,14 @@ loop:       jsr pullbit
 			rol bits+1
 			dex
 			bpl loop
-			pla 
-			tay
 			lda bits
 end2:       ldx #0
 			rts
 
-pullLIbits:
-			lda #<LIbv
-			ldx #>LIbv
-			bne pulldatabits
-pullCNTbits:                  // eredmeny bits-ben
+pullCNTbits:                     // eredmeny bits-ben
 			lda #<CNTbv
 			ldx #>CNTbv
-			bne pulldatabits
-pullDISTbits:
-			lda #<DISTbv
-			ldx #>DISTbv
+
 pulldatabits:
 			sta tmp
 			stx tmp+1            //tmp fog mutatni tablazatra
@@ -399,34 +395,22 @@ read:
 			lda outbits+1
 			adc bits+1
 			sta bits+1
-
 			rts
-
-
-
 
 exp:        .byte <2, <4, <8, <16, <32, <64, <128, <256, <512, <1024, <2048, <4096, <8192, <16384, <32768
 expH:       .byte >2, >4, >8, >16, >32, >64, >128, >256, >512, >1024, >2048, >4096, >8192, >16384, >32768
 
-ENDa:       .word  0
-//LUT: 		.word  0
-dw:         .byte  0
-h:          .word  0
-l:          .word  0
-CNTbv:      .byte  0 	// order is important
-CNTbits:    .byte  0, 0, 0, 0, 0, 0, 0, 0
-DISTbv:     .byte  0
-DISTbits:   .byte  0, 0, 0, 0, 0, 0, 0, 0
-LIbv:		.byte  0
-LIbits:		.byte  0, 0, 0, 0, 0, 0, 0, 0
-Flags: 		.byte  0 	// 1: DIR, 2: NEGCHECK, 4: USELOOKUP
 
+
+theend:
 
 .print "munpackerX length "+(exp-UNPACKX)+" Bytes"	   
-.print "code length "+(exp-main)+" Bytes"	   
+.print "total code length "+(theend-main)+" Bytes"	   
+//.print "BSS code length "+(theend-ENDa)+" Bytes"	   
 
 packeddata:
-.import binary "spiral.pkx"
+//.import binary "spiral_NL.pkx"
+.import binary "spiral_back_NL.pkx"
 
 
 .print "packeddata length "+(*-packeddata)+" Bytes"	   
