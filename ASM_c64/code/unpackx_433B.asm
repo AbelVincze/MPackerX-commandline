@@ -1,14 +1,16 @@
 // munpackerX, c64 version, kickAssembler syntax
 
 
+
+
+
 .const mmchl = 4
-.var zpvars = $c0  //$D9 
-.var BSS =  $c6    //$3DD // putting bss to ZP makes code 14 bytes less
-.var BSSbuffer = $3C7 	  // but needs caching to not destroy basic
+.var zpvars = $D9
+.var BSS = $3DD
 
 *=BSS "BSS" virtual 
-			// unpack data
-ENDa:       .word  0 	
+ENDa:       .word  0
+dw:         .byte  0
 h:          .word  0
 l:          .word  0
 CNTbv:      .byte  0 	// order is important
@@ -18,19 +20,6 @@ DISTbits:   .byte  0, 0, 0, 0, 0, 0, 0, 0
 LIbv:		.byte  0
 LIbits:		.byte  0, 0, 0, 0, 0, 0, 0, 0
 Flags: 		.byte  0 	// 1: DIR, 2: NEGCHECK, 4: USELOOKUP
-			// zp variables
-tmp1:       .byte  0
-tmp2:       .byte  0
-tmpY2:      .byte  0
-tmpY3: 		.byte  0
-licnt:      .word  0
-tbin:       .word  0
-boend:      .word  0  		        // last out byte +1 (to compare)
-bitbc:      .byte  0
-BITBUFF:    .byte  0
-bits:       .word  0
-cnt:        .byte  0
-outbits:    .word  0
 
 			*=$0801 "basic startup"
 
@@ -74,27 +63,29 @@ swapdata:
 			sta zpvars,y
 			dey
 			bpl !loop-
-
-			ldy #50
-!loop:
-			lda BSS,y
-			pha
-			lda BSSbuffer,y
-			sta BSS,y 
-			pla
-			sta BSSbuffer,y
-			dey
-			bpl !loop-			
 			rts
 
 			*=* "zp data block"
 data:
 .pseudopc zpvars {
-			// not reusable data, it will be overwritten with actual values
-pbin:        .word packeddata       // packed binary input
-bout:        .word $2000		    // binary output
+
+tmp1:        .byte 0
+tmp2:        .byte 0
+tmpY2:       .byte 0
+tmpY3: 		 .byte 0
+licnt:       .word 0
+tbin:        .word 0
+pbin:        .word packeddata        // packed binary input
+bout:        .word $2000		        // binary output
+boend:       .word 0  		        // last out byte +1 (to compare)
 isStream:    .byte 1
+bitbc:       .byte 0
+BITBUFF:     .byte 0
+bits:        .word 0
 tmp:         .byte 0, >BSS 			// store high byte for DIST/CNT/LIbv
+cnt:         .byte 0
+outbits:     .word 0
+
 }
 dataend:
 			*=* "unpack code"
@@ -111,16 +102,19 @@ UNPACKX:   // unpacking pakerX packages
 			// sta l               // length = dw * h
 			// sta l+1
 
-			jsr getAbyte        // height Big endian
+			jsr getAbyte        // height
 			sta h+1
 			jsr getAbyte
 			sta h
+
 			jsr getAbyte        // read first byte of the packed data
-			tax 				// we do not store dw (but maybe should) - 2 bytes
+			sta dw              // byte width
+			tax
 
 !loop:		lda l               // calc length (l*h)
-			adc h 				// don't need clc, cause we start with C clear,
-			sta l 				// and second add also clears - 1 Byte
+			clc
+			adc h
+			sta l
 			lda l+1
 			adc h+1
 			sta l+1
@@ -128,55 +122,61 @@ UNPACKX:   // unpacking pakerX packages
 			bne !loop-      
 
 			lda l               // calc end address (+1)
-			adc bout			//clc - the previous addition left C clear -1 Byte
+			clc
+			adc bout
 			sta boend
 			lda l+1
 			adc bout+1
 			sta boend+1
 
-			ldx #2          	// 3 bitet olvasunk
-			jsr pullnbits
-			sta Flags
-			and #$04 			// USELOOKUP?
-			beq skipli
+				ldx #2          // 3 bitet olvasunk
+				jsr pullnbits
+				sta Flags
+				and #$04 		// USELOOKUP?
+				beq skipli
 								// set up LUT
-			jsr getAbyte 		// LUT size 0-255 (0=256)
-			ldx pbin 			// remove tax and use X to save A - 1 byte
-			stx LUT+1
-			ldx pbin+1
-			stx LUT+2
-			tax 				// need to set Z 
-			beq !skipadd+ 		// ha 0, akkor 256 ! (bne-rol valtva a logika -> -2 byte)
-			adc pbin 			// clc was cleared by getAbyte
-			sta pbin
-			bcc !skip+
-!skipadd:
-			inc pbin+1
+				jsr getAbyte 	// LUT size 0-255 (0=256)
+				tax
+				lda pbin
+				sta LUT+1
+				lda pbin+1
+				sta LUT+2
+				txa
+				bne !skip+
+				inc pbin+1 		// ha 0, akkor 256 !
+!skip:						
+				clc
+				adc pbin
+				sta pbin
+				bcc !skip+
+				inc pbin+1
 !skip:
-			lda #<LIbv
-			ldx #2
-			jsr setupnv
-						
+				lda #<LIbv
+				ldy #2
+				jsr setupnv
+
 skipli:
 			//restore CNTbitdepths
-			ldx #3				// -0 byte, setupnv restores Y
-			lda #<CNTbv 		// only need low byte
+			lda #<CNTbv // only need low byte
+			ldy #3
 			jsr setupnv
 
 			//restore DISTbitdepths
 			lda #<DISTbv
+			ldy #3
 			jsr setupnv
 
-// UNPACK data ------------------------------------------------------------------
-			
-unpackloop:						// unpack mainloop
+			// UNPACK data ------------------------------------------------------------------
+			// unpack mainloop
+unpackloop:
 			lda bout+1 			// is finished?
 			cmp boend+1
-			bcc ulcont 			// bcc is failsafe... bne is strict
+			bcc ulcont
 			lda bout
 			cmp boend
 			bcc ulcont
 			rts
+
 ulcont:
 			lda isStream
 			beq Repeat
@@ -184,31 +184,36 @@ ulcont:
 Stream:		// STREAM --------------------------------------------
 			dec isStream 		// next block will be REPEAT
 			jsr pullCNTbits 	// read data length
+
 			sta licnt+1 		// a bits+1 van az akkuban!
 			lda bits
 			sta licnt
+
 sloop:
 				lda Flags
-				and #$04 			// USELOOKUP?
+				and #$04 		// USELOOKUP?
 				bne slcopy
 
-				jsr getAbyte 		// copy from packed data
-				bne !skip+ 			// utoljara inc pbin+1 volt, az meg ugye...
+			jsr getAbyte 		// copy from packed data
+			bne !skip+ 			// utoljara inc pbin+1 volt, az meg ugye...
+
 slcopy:
 				lda #<LIbv
-				jsr pulldatabits  	// Rear variable lenght "byte"
+				jsr pulldatabits  // Rear variable lenght "byte"
 				ldy bits
 LUT:
-				lda $FFFF,y 		// Address set up at LUT init
+				lda $FFFF,y 	// Address set up at LUT init
 !skip:
-				jsr setAbyte 		// the stream is packed
+				jsr setAbyte 	// the stream is packed
 
-				lda licnt 			// * 16 bit arithmetic *
-				bne ln0
-				dec licnt+1
-				bmi unpackloop 		// ?bne (+lda/dec) nem hiszem hogy 32767 byte-nal hosszabb stream lenne.		
+			lda licnt 			// * 16 bit arithmetic *
+			bne ln0
+			dec licnt+1
+upl:		bmi unpackloop 		// ?bne (+lda/dec) nem hiszem hogy 32767 byte-nal hosszabb stream lenne...	
+			
 ln0:        dec licnt
 			jmp sloop
+
 
 Repeat:		// REPEAT --------------------------------------------
 			jsr pullbit
@@ -224,35 +229,37 @@ Repeat:		// REPEAT --------------------------------------------
 			sbc bits+1
 			sta tbin+1
 
-			jsr pullCNTbits 	// clc not needed, pulldatabits clears it - 1 byte
+			jsr pullCNTbits
+			clc 				// * 16 bit arithmetic *
 			lda bits 			// ezt a reszt modositjuk, hogy ne kelljen mar ennyit matekozni
 			adc #mmchl
-			tax 				// using x instead of bits - 2 bytes
+			sta bits
 			bcc r3
 			inc bits+1
 r3:			ldy #0
-			sty tmp 			// tmp atszervezese - 1 byte
 			
-			lda Flags 			// NEGCHECK?
-			and #$02
-			beq repeatloop
+				lda Flags 		// NEGCHECK?
+				and #$02
+				beq r1
 
-			jsr pullbit 		// is NEG?
-			bcc repeatloop
-			dec tmp
-
-repeatloop:			
-				lda (tbin),y
-				eor tmp
-				sta (bout),y
-				iny 				// * 16 bit arithmetic *
-				bne r0
-				inc tbin+1
-				inc bout+1
-r0:         	dex
-				bne repeatloop
-				dec bits+1 
-				bpl repeatloop 		// csak akkor mukodik ha 32768-nal rovidebb...
+			jsr pullbit
+			tya
+			bcc r1
+			lda #$ff
+r1:         sta tmp
+repeatloop:
+			
+			lda (tbin),y
+			eor tmp
+			sta (bout),y
+			iny 				// * 16 bit arithmetic *
+			bne r0
+			inc tbin+1
+			inc bout+1
+r0:         cpy bits
+			bne repeatloop
+			dec bits+1
+			bpl repeatloop
 			tya
 			clc 				// * 16 bit arithmetic *
 			adc bout
@@ -265,19 +272,21 @@ r2:
 			//---------------------------------------------------------------------
 			// HELPER FUNCTIONS
 setupnv:
-			stx tmp1 			// using X instead of Y saves 2 bytes
+			sty tmp1
 			sta tmp
 			ldx #2              // 3 bitet olvasunk
 			jsr pullnbits
 			ldy #0
 			sta (tmp),y
-			adc #1 				// pullnbits cleared C -1 byte
+			clc
+			adc #2
 			sta tmp2
+			iny
 			ldx tmp1			// read 3/4 bits (dep input Y)
 sloop1:
-			iny 				// repositioning iny - 1 byte
 			jsr pullnbits
 			sta (tmp),y
+			iny
 	        cpy tmp2
 			bne sloop1
 			rts
@@ -300,13 +309,14 @@ sbend:      rts
 
 pullbit: 	// pull a single bit from the packed data - X/Y saved, A modified
 			sty tmpY2
-			dec bitbc
-			bpl next
+			ldy bitbc
+			bne next
 			jsr getAbyte
-			ldy #7
-			sty bitbc
+			ldy #8
 			sta BITBUFF
 next:
+			dey
+			sty bitbc
 			ldy tmpY2
 			rol BITBUFF
 			rts
@@ -322,8 +332,8 @@ loop:       jsr pullbit
 			rol bits+1
 			dex
 			bpl loop
-			ldx tmpY3
 			lda bits
+end2:       ldx tmpY3
 			rts
 
 pullCNTbits:                     // eredmeny bits-ben
@@ -344,7 +354,8 @@ pdloop:
 			bcs read
 
 			lda expL,x
-			adc outbits 		// clc not needed, C is clear here (bcs)
+			clc
+			adc outbits
 			sta outbits
 			lda expH,x
 			adc outbits+1
@@ -358,27 +369,28 @@ pdloopin:
 			bpl pdloop
 
 read:
-			jsr pullnbits 		// bits in A already - 2 Bytes
-			adc outbits  		// pullnbits cleared C -1 byte
+			jsr pullnbits
+			lda outbits
+			clc
+			adc bits
 			sta bits
 			lda outbits+1
 			adc bits+1
-			sta bits+1 			// C is clear, no overflow here...
+			sta bits+1
 			rts
 
-expH:       .byte >2, >4, >8, >16, >32, >64, >128, >256 //, >512, >1024, >2048, >4096, >8192, >16384, >32768
 expL:       .byte <2, <4, <8, <16, <32, <64, <128, <256, <512, <1024, <2048, <4096, <8192, <16384, <32768
-			// <2 = >512, <4 = >1024 etc... save 7 bytes
+expH:       .byte >2, >4, >8, >16, >32, >64, >128, >256, >512, >1024, >2048, >4096, >8192, >16384, >32768
 
 theend:
 
-.print "munpackerX length "+(expH-UNPACKX)+" Bytes"	   
+.print "munpackerX length "+(expL-UNPACKX)+" Bytes"	   
 .print "total code length "+(theend-main)+" Bytes"	   
-.print "BSS code length "+(Flags+1-BSS)+" Bytes"	   
+//.print "BSS code length "+(theend-ENDa)+" Bytes"	   
 
 packeddata:
 .import binary "spiral_NL.pkx"
-//.import binary "spiral_back_NL.pkx"
+//.import binary "spiral_back.pkx"
 
 
 .print "packeddata length "+(*-packeddata)+" Bytes"	   

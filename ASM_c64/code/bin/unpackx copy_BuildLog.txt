@@ -1,0 +1,20 @@
+Output dir: /Users/macc/dev/MPackerX-commandline/ASM_c64/code/bin
+parsing
+flex pass 1
+flex pass 2
+Output pass
+  munpackerX length 455 Bytes
+  total code length 570 Bytes
+  packeddata length 2857 Bytes
+Writing prg file: /Users/macc/dev/MPackerX-commandline/ASM_c64/code/bin/unpackx copy.prg
+
+Memory Map
+----------
+Default-segment:
+  *$03dd-$03ff BSS
+  $0801-$080c basic startup
+  $080d-$0849 main code
+  $084a-$0861 zp data block
+  $0862-$156f unpack code
+
+Writing Vice symbol file: /Users/macc/dev/MPackerX-commandline/ASM_c64/code/bin/unpackx copy.vs
