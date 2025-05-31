@@ -2,22 +2,12 @@
 
 
 .const mmchl = 4
-.var zpvars = $c0  //$D9 
-.var BSS =  $c6    //$3DD // putting bss to ZP makes code 14 bytes less
-.var BSSbuffer = $3C5 	  // but needs caching to not destroy basic
+.var zpvars = $C0  		//$D9 
+.var BSS =  zpvars+10    //$3DD // putting bss to ZP makes code 14 bytes less
+.var BSSbuffer = $3C0 	// but needs caching to not destroy basic
 
-*=BSS "BSS" virtual 
-			// unpack data
-ENDa:       .word  0 	
-h:          .word  0
-l:          .word  0
-CNTbv:      .byte  0 	// order is important
-CNTbits:    .byte  0, 0, 0, 0, 0, 0, 0, 0
-DISTbv:     .byte  0
-DISTbits:   .byte  0, 0, 0, 0, 0, 0, 0, 0
-LIbv:		.byte  0
-LIbits:		.byte  0, 0, 0, 0, 0, 0, 0, 0
-Flags: 		.byte  0 	// 1: DIR, 2: NEGCHECK, 4: USELOOKUP
+*=BSS "BSS" virtual
+
 			// zp variables
 tmp1:       .byte  0
 tmp2:       .byte  0
@@ -27,14 +17,29 @@ lut: 		.word  0
 licnt:      .word  0
 tbin:       .word  0
 boend:      .word  0  		        // last out byte +1 (to compare)
-bitbc:      .byte  0
 BITBUFF:    .byte  0
 bits:       .word  0
 cnt:        .byte  0
 outbits:    .word  0
 
-			*=$0801 "basic startup"
+			// unpack data	
+h:          .word  0
+CNTbv:      .byte  0 	// order is important
+CNTbits:    .byte  0, 0, 0, 0, 0, 0, 0, 0
+DISTbv:     .byte  0
+DISTbits:   .byte  0, 0, 0, 0, 0, 0, 0, 0
+LIbv:		.byte  0
+LIbits:		.byte  0, 0, 0, 0, 0, 0, 0, 0
+Flags: 		.byte  0 	// 1: DIR, 2: NEGCHECK, 4: USELOOKUP
 
+
+
+
+bssend:
+
+
+			*=$0801 "basic startup"
+begin:
 			// basic start line
 			.byte $0B, $08, $00, $00, $9E, $32, $30, $36, $31, $00, $00, $00
 
@@ -65,58 +70,49 @@ main:
 			rts
 
 swapdata:
-			ldy #dataend-data-1
+			ldx #dataend-data-1
 !loop:
-			lda data,y
-			pha
-			lda zpvars,y
-			sta data,y 
-			pla
-			sta zpvars,y
-			dey
+			ldy data,x
+			lda.zp zpvars,x
+			sta data,x 
+			sty zpvars,x
+			dex
 			bpl !loop-
 
-			ldy #52
+			ldx #47
 !loop:
-			lda BSS,y
-			pha
-			lda BSSbuffer,y
-			sta BSS,y 
-			pla
-			sta BSSbuffer,y
-			dey
+			ldy BSSbuffer,x
+			lda.zp BSS,x
+			sta BSSbuffer,x
+			sty BSS,x
+			dex
 			bpl !loop-			
 			rts
+
 
 			*=* "zp data block"
 data:
 .pseudopc zpvars {
 			// not reusable data, it will be overwritten with actual values
-pbin:        .word packeddata       // packed binary input
-bout:        .word $2000		    // binary output
-isStream:    .byte 1
-tmp:         .byte 0, >BSS 			// store high byte for DIST/CNT/LIbv
+			// these values are the init values.
+pbin:       .word  packeddata       // packed binary input
+bout:       .word  $2000		    // binary output
+isStream:   .byte  1
+tmp:        .byte  0, >BSS 			// store high byte for DIST/CNT/LIbv
+l:          .word  0
+bitbc:      .byte  0
+
 }
 dataend:
-			*=* "unpack code"
 
+			*=* "unpackx code"
 
-UNPACKX:   // unpacking pakerX packages
-	  
-			// INIT unpack loop: isStream to true for starting
-			// these are initialized by the swapdata
-			// lda #1
-			// sta isStream
-			// lda #0              // inicializalas...
-			// sta bitbc
-			// sta l               // length = dw * h
-			// sta l+1
-
+UNPACKX:    // unpacking pakerX packages
 			jsr getAbyte        // height Big endian
 			sta h+1
 			jsr getAbyte
 			sta h
-			jsr getAbyte        // read first byte of the packed data
+			jsr getAbyte        // dw (byte width)
 			tax 				// we do not store dw (but maybe should) - 2 bytes
 
 !loop:		lda l               // calc length (l*h)
@@ -135,7 +131,7 @@ UNPACKX:   // unpacking pakerX packages
 			adc bout+1
 			sta boend+1
 
-			ldx #2          	// 3 bitet olvasunk
+			ldx #2          	// read 3 bits
 			jsr pullnbits
 			sta Flags
 			and #$04 			// USELOOKUP?
@@ -278,7 +274,7 @@ sloop1:
 			iny 				// repositioning iny - 1 byte
 			jsr pullnbits
 			sta (tmp),y
-	        cpy tmp2
+			cpy tmp2
 			bne sloop1
 			rts
 
@@ -366,19 +362,21 @@ read:
 			sta bits+1 			// C is clear, no overflow here...
 			rts
 
+unpackxend:
+
 expH:       .byte >2, >4, >8, >16, >32, >64, >128, >256 //, >512, >1024, >2048, >4096, >8192, >16384, >32768
 expL:       .byte <2, <4, <8, <16, <32, <64, <128, <256, <512, <1024, <2048, <4096, <8192, <16384, <32768
 			// <2 = >512, <4 = >1024 etc... save 7 bytes
 
 theend:
 
-.print "munpackerX length "+(expH-UNPACKX)+" Bytes"	   
-.print "total code length "+(theend-main)+" Bytes"	   
-.print "BSS code length "+(Flags+1-BSS)+" Bytes"	   
-
 packeddata:
 .import binary "spiral_NL.pkx"
 //.import binary "spiral_back_NL.pkx"
 
-
-.print "packeddata length "+(*-packeddata)+" Bytes"	   
+.print "munpackerX  "+(unpackxend-UNPACKX)+" Bytes"	   
+.print "total code  "+(theend-main)+" Bytes"	   
+.print "(BSS data   "+(bssend-BSS)+" Bytes)"	   
+.print "packeddata  "+(*-packeddata)+" Bytes"	   
+.print "basic       "+(main-begin)+" Bytes"	   
+.print "total       "+(*-begin)+" Bytes"	   
