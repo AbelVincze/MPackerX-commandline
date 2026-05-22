@@ -1,5 +1,5 @@
 arm:
-	g++-12 main.cpp -o mpackerx -I -Wall -Os -flto -no-pie
+	g++ main.cpp -o mpackerx -I -Wall -Os -flto -no-pie
 	cp mpackerx ~/bin/mpackerx
 
 as:

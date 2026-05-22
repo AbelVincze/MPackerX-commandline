@@ -53,21 +53,21 @@ char*				ldata;			// loaded data
 char*				pdata;			// packed data
 
 typedef struct {
-	unsigned short int	L;
-	unsigned short int	SRC;
-	unsigned short int	T;
+	unsigned int		L;
+	unsigned int		SRC;
+	unsigned int		T;
 	bool				N;
 } repeatdata;
 typedef struct {
 	bool				ST;
-	unsigned short int	L;
-	unsigned short int	T;
-	unsigned short int	SRC;
+	unsigned int		L;
+	unsigned int		T;
+	unsigned int		SRC;
 	bool				N;
 } blockdata;
 typedef struct {
 	unsigned char		B;
-	unsigned short int	C;
+	unsigned int		C;
 } bytecount;
 typedef struct {
 	unsigned short int	m;
@@ -77,7 +77,7 @@ typedef struct {
 	unsigned char		bitvars;
 	int  				l;
 	int					MAX;
-	unsigned short int	maxsaves;
+	int					maxsaves;
 	unsigned short int	maxvs;
 	unsigned int		checks;
 	unsigned char		maxpatt[maxpatterns];
@@ -272,7 +272,7 @@ void displayHelp() {
 }
 
 void dotest( unsigned char result[], testdata SDATA[], unsigned short int sdatacount, int MAX ) {
-	//for( int i=0;i<sdatacount;i++ ) cout << +i << " - " << +SDATA[i] << "\n";
+	//for( int i=0;i<sdatacount;i++ ) cout << +i << " - m: " << +(SDATA[i].m) << ", v: " << +(SDATA[i].v) << "\n";
 
 	testvars vars = (testvars){ 1, (int)sdatacount, MAX, 0, 0, 0 };
 	for( int i=0;i<maxpatterns;i++ ) vars.bits[i]=0;
@@ -413,14 +413,29 @@ void munpack() {
 
 	//filesize			pl = pdata.byteLength,
 	bin = 0;
-	H = (unsigned char)pdata[ bin++ ]*256;
-	H += (unsigned char)pdata[ bin++ ];
-	BW = (unsigned char)pdata[ bin++ ];
+
+
+	//text = true;
+
+	if( text ) {
+		expsize = (unsigned char)pdata[ bin++ ]*65536;
+		expsize += (unsigned char)pdata[ bin++ ]*256;
+		expsize += (unsigned char)pdata[ bin++ ];
+
+		H = 0;
+		BW = 1;
+
+	} else {
+		H = (unsigned char)pdata[ bin++ ]*256;
+		H += (unsigned char)pdata[ bin++ ];
+		BW = (unsigned char)pdata[ bin++ ];
+
+		expsize = BW*H;
 	
-	expsize = BW*H;
-	
-	cout << "BW: " << +BW << "\n";
-	cout << "H:  " << +H << "\n";
+		cout << "BW: " << +BW << "\n";
+		cout << "H:  " << +H << "\n";
+	}
+
 	cout << "Expsize: " << +expsize << "\n";
 	
 	ldata = (char*) malloc(expsize);
@@ -428,9 +443,16 @@ void munpack() {
 	memset(ldata, PAD, expsize);
 
 	if( !b_mode ) {
-		USELOOKUP = pullbit()==1;
-		NEGCHECK = pullbit()==1;
-		DIR = pullbit()==1;
+		if( text ) {
+			USELOOKUP = true;
+			NEGCHECK = false;
+			DIR = false;			
+
+		} else {
+			USELOOKUP = pullbit()==1;
+			NEGCHECK = pullbit()==1;
+			DIR = pullbit()==1;			
+		}
 	} else {
 		USELOOKUP = false;
 		// DIR es NEGCHECK a parameter szerint, mivel az nincs a tarolt adatban.
@@ -690,12 +712,12 @@ void mpack() {
 				chp++;
 			}
 			if( chp>=mmchl && best.L<chp ) {
-				best = (repeatdata){ (short unsigned int)chp, (short unsigned int)chbin, (short unsigned int)bin, false };
+				best = (repeatdata){ (unsigned int)chp, (unsigned int)chbin, (unsigned int)bin, false };
 			} else if( NEGCHECK ) {
 				chp = 0;
 				while( chp<maxchecklength && (unsigned char)ldata[ bin+chp ] == 255-(unsigned char)ldata[ chbin+chp ] ) { chp++; }
 				if( chp>=mmchl && best.L<chp ) {
-					best = (repeatdata){ (short unsigned int)chp, (short unsigned int)chbin, (short unsigned int)bin, true };
+					best = (repeatdata){ (unsigned int)chp, (unsigned int)chbin, (unsigned int)bin, true };
 				}
 			}
 			chbin--;
@@ -725,9 +747,9 @@ void mpack() {
 
 	// PASS 2 - building Blocks ---------------------------------------------------------
 
-	unsigned short int prevend = 0;
+	unsigned int prevend = 0;
 	int blkcount = 0;
-	unsigned short int T;
+	unsigned int T;
 
 	unsigned int maxblocks = repcount*2;
 	blockdata* blocks = (blockdata*) malloc(sizeof(blockdata)*maxblocks);
@@ -736,12 +758,12 @@ void mpack() {
 	
 	for( int r=0; r<repcount; r++ ) {
 		T = repeats[r].T;
-		if( prevend<T ) blocks[blkcount++] = (blockdata){ true, (short unsigned int)(T-prevend), prevend };
+		if( prevend<T ) blocks[blkcount++] = (blockdata){ true, (unsigned int)(T-prevend), prevend };
 		blocks[blkcount++] = (blockdata){ false, repeats[r].L, T, repeats[r].SRC, repeats[r].N };
 		prevend = T+repeats[r].L;
 	}
 	//cout << +prevend << " vs. " << +l << "\n";
-	if( prevend<l ) blocks[blkcount++] = (blockdata){ true, (short unsigned int)(l-prevend), prevend };
+	if( prevend<l ) blocks[blkcount++] = (blockdata){ true, (unsigned int)(l-prevend), prevend };
 
 	free(repeats);	// as we don't need the repeats anymore, everything is in blocks now
 	repeats = NULL;
@@ -851,8 +873,8 @@ void mpack() {
 	
 	unsigned short int	Clcount = 0;
 	unsigned short int	Dlcount = 0;
-	unsigned short int	Ccnt = 0;
-	unsigned short int	Dcnt = 0;
+	//unsigned short int	Ccnt = 0;
+	//unsigned short int	Dcnt = 0;
 	
 	CNTlist[Clcount++] = (testdata){ 1, cntlist[0] }; 
 	for( int i=1; i<clcount; i++ ) {
@@ -918,11 +940,17 @@ void mpack() {
 
 	// Start writing the output:
 	// output "header":
-	pdata[ bout++ ] =  (H&0xFF00)>>8;		// Bitmap height (16 bit big endian)
-	pdata[ bout++ ] =  H&0xFF;
-	pdata[ bout++ ] =  BW;					// Bitmap bytewidth (width/8)
+	if( text ) {
+		pdata[ bout++ ] =  (filesize&0xFF0000)>>16;		// Bitmap msb (24 bit big endian)
+		pdata[ bout++ ] =  (filesize&0xFF00)>>8;		// Bitmap height (24 bit big endian)
+		pdata[ bout++ ] =  filesize&0xFF;
+	} else {
+		pdata[ bout++ ] =  (H&0xFF00)>>8;		// Bitmap height (16 bit big endian)
+		pdata[ bout++ ] =  H&0xFF;
+		pdata[ bout++ ] =  BW;					// Bitmap bytewidth (width/8)
+	}
 	
-	if( !b_mode ) {
+	if( !b_mode && !text ) {
 		pushbit( USELOOKUP?1:0 );			// Do we use Lookup table?
 		pushbit( NEGCHECK?1:0 );			// Do we use negative repeats?
 		pushbit( DIR?1:0 );
