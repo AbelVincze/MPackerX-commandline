@@ -28,7 +28,10 @@ OPTIONS:
 -m	Maxvars (Default 5)
 -v	Verbose mode on
 -b	Use mpacker9o compression (for 188B m68k ASM unpack tool)
--t	Try different M values
+-x	Try different M values
+-t	Text mode (16MB file size limit)
+-j	jspackerx mode: self extracting .js file, the same as the jspackerx page makes
+	(-t -M 32767 -L 30000; min 512 bytes; written to stdout if no output file is set)
 -u	Unpack
 ```
 

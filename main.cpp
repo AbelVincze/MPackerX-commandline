@@ -2,6 +2,9 @@
 #include <fstream>
 #include <cmath>
 #include <cstring>	// for linux
+#include <cstdio>
+#include <string>
+#include <vector>
 #include <chrono>
 #include <algorithm>
 //#include <emscripten.h>
@@ -37,6 +40,7 @@ bool				USELOOKUP	= false;	// create lookup table
 int					maxvars		= 5;		// max pattern length
 bool				trying		= false;	// try different length
 bool				text        = false;	// text mode
+bool				jsmode      = false;	// jspackerx mode (text mode + self extracting .js output)
 bool				unpack		= false;	// unpack file
 
 char hexnum[17] = "0123456789ABCDEF";
@@ -92,8 +96,11 @@ bool bcsorter(bytecount const& lhs, bytecount const& rhs) { return lhs.C > rhs.C
 	
 int		parseArgs(int argc, char* argv[]);
 void	displayHelp();
-void	mpack();
+int		mpack();
 void	munpack();
+int		jsxsave( unsigned char packed[], int count, unsigned char orig[], int origsize );
+bool	jsxcheck( unsigned char packed[], int count, unsigned char orig[], int origsize );
+string	base64( const unsigned char data[], int count );
 void	dotest( unsigned char result[], testdata SDATA[], unsigned short int sdatacount, int MAX );
 void	checkdepth( int d, testvars *vars, testdata SDATA[] );
 void	getsaves( checkresult *result, testvars *vars, testdata SDATA[] );
@@ -108,17 +115,20 @@ unsigned short int pulldatabits( unsigned char bitdepths[], int l );
 void hexdump( char data[], int count );
 
 int	main(int argc, char* argv[]) {
+	int rc = 0;
 	if( parseArgs( argc,  argv ) == 0 ) {
+		// in jspackerx mode stdout carries the .js file only, every message goes to stderr
+		if( jsmode && !unpack ) cout.rdbuf( cerr.rdbuf() );
 		// options are OK, so let's do our job!
 		if( v_mode ) cout << "\e[1mMPackerX\e[0m v1.0 by Abel Vincze 2018 - https://iparigrafika.hu\n\n";
 		chrono::steady_clock::time_point begin = chrono::steady_clock::now();
 		if( unpack ) { munpack(); }
-		else		 { mpack(); }
+		else		 { rc = mpack(); }
 		chrono::steady_clock::time_point end= chrono::steady_clock::now();
 		float ms = (float)chrono::duration_cast<chrono::microseconds>(end - begin).count() /1000;
 		if( v_mode ) cout << "Execution time:\t" << +ms << "ms\n";
 	}
-	return 0;
+	return rc;
 }
 int parseArgs(int argc, char* argv[]) {
 
@@ -201,6 +211,7 @@ int parseArgs(int argc, char* argv[]) {
 						DIR=false;
 						text=true;
 						break;
+					case 'j':	jsmode=true;	break;
 					case 'u':	unpack=true;	break;
 					case 'n':	NEGCHECK=true;	break;
 					case 'l':	USELOOKUP=true;	break;
@@ -224,7 +235,16 @@ int parseArgs(int argc, char* argv[]) {
 		}
 		argcnt++;
 	}
-	
+
+	if( jsmode ) {
+		// what jspackerx packs with (jspackerx/source/wasm/mpackerx_wasm.cpp), whatever else is given:
+		// -t -M 32767 -L 30000, maxvars 5
+		text = true;	USELOOKUP = true;	NEGCHECK = false;	DIR = false;
+		b_mode = false;	trying = false;		force_hex = false;
+		BW = 1;			H = 0;
+		MAXD = 32767;	MAXC = 30000;		maxvars = 5;
+	}
+
 	if( haveinfile ) return 0;
 	
 	//cout << "No input file specified, nothing to do!\n";
@@ -267,7 +287,9 @@ void displayHelp() {
 			"  -b\tUse mpacker9o compression (for 188B m68k ASM unpack tool)\n"
 			"  -x\tTry different M values\n"
 			"  -t\tText mode (16MB file size limit)\n"
-			"  -u\tUnpack\n"
+			"  -j\tjspackerx mode: self extracting .js file, the same as the jspackerx page makes\n"
+			"    \t(-t -M 32767 -L 30000; min 512 bytes; written to stdout if no output file is set)\n"
+			"  -u\tUnpack (supports Otv[blnd] options)\n"
 			"\nIf no output file is set, the result will be printed on the standard output in hexdump format\n";
 }
 
@@ -593,7 +615,7 @@ void hexdump( char data[], int count ) {
 }
 
 //EMSCRIPTEN_KEEPALIVE
-void mpack() {
+int mpack() {
 
 	unsigned int	filesize = 0;
 	unsigned int	expsize = 0;
@@ -602,43 +624,56 @@ void mpack() {
 
 	ifstream myFile;
 	myFile.open(infile, ifstream::in | ifstream::ate);
-	if( !myFile.is_open() ) { cout << "File not found\n"; return; }
+	if( !myFile.is_open() ) { cout << "File not found\n"; return 1; }
 	
 	filesize = (unsigned int)myFile.tellg();
 
-	if( text ) BW=1;
-
-	if( H==0 ) { // default setting	
-		H = ceil((float)filesize/BW);
+	if( text ) {
+		// no bitmap dimensions: the 16 bit H can't hold a text file's size
+		BW = 1;
+		H = 0;
+		expsize = filesize;
+	} else {
+		if( H==0 ) { // default setting	
+			H = ceil((float)filesize/BW);
+		}
+		expsize = BW*H;
 	}
-	expsize = BW*H;
+	if( jsmode && filesize<512 ) {
+		cout << "File too small: jspackerx packs 512 bytes or more\n";
+		return 1;
+	}
 	
 	if( !text && filesize>0xFFFF ) {
 		cout << "File size too large: max 0xFFFF bytes\n";
-		return;
+		return 1;
 	}
 	if( text && filesize>0xFFFFFF ) {
 		cout << "File size too large: max 0xFFFFFF bytes\n";
-		return;
+		return 1;
 	}
 	if( expsize>filesize ) {
 		//cout << "Padding needed: " << (expsize-filesize) << " bytes\n";
 	} else if( expsize<filesize ) {
 		cout << "Dimensions too small: -" << (filesize-expsize) << " bytes\n";
-		return;
+		return 1;
 	} else {
 		//cout << "File size matches dimension\n";
 	}
 
 	if( v_mode ) {
-		cout << "Original:\t" << +filesize << "B\t(";
-		if( expsize != filesize ) cout << +expsize << " - ";
-		cout << +BW << "x" << +H << "B)\n";
+		cout << "Original:\t" << +filesize << "B";
+		if( !text ) {
+			cout << "\t(";
+			if( expsize != filesize ) cout << +expsize << " - ";
+			cout << +BW << "x" << +H << "B)";
+		}
+		cout << "\n";
 	}
 	
 	// Make the buffer
 	ldata = (char*) malloc(expsize);
-	if(!ldata) { cout << "Memory Allocation Failed"; return; }
+	if(!ldata) { cout << "Memory Allocation Failed"; return 1; }
 	memset(ldata, PAD, expsize);
 
 	// Copy data with the right order
@@ -678,7 +713,7 @@ void mpack() {
 	unsigned int maxrepeats = 1024;	//1024;
 	
 	repeatdata* repeats = (repeatdata*) malloc(sizeof(repeatdata)*maxrepeats);
-	if(repeats==NULL) { cout << "Memory Allocation Failed"; return; }
+	if(repeats==NULL) { cout << "Memory Allocation Failed"; return 1; }
 	//cout << "Memory Allocated for " << +maxrepeats << " repeats: " << sizeof(repeatdata)*maxrepeats << " bytes\n";
 
 
@@ -727,7 +762,7 @@ void mpack() {
 				//cout << "Np more space for repeats...\n";
 				maxrepeats *= 2;
 				repeatdata* tmp = (repeatdata*) realloc(  repeats, sizeof(repeatdata)*maxrepeats );
-				if(tmp==NULL) { cout << "Memory Allocation Failed"; return; }
+				if(tmp==NULL) { cout << "Memory Allocation Failed"; return 1; }
 				repeats = tmp;
 				//cout << "Memory Allocated for " << +maxrepeats << " repeats: " << sizeof(repeatdata)*maxrepeats << " bytes\n";
 				//return;
@@ -751,9 +786,9 @@ void mpack() {
 	int blkcount = 0;
 	unsigned int T;
 
-	unsigned int maxblocks = repcount*2;
+	unsigned int maxblocks = repcount*2+1;	// a stream before each repeat, and one after the last
 	blockdata* blocks = (blockdata*) malloc(sizeof(blockdata)*maxblocks);
-	if(blocks==NULL) { cout << "Memory Allocation Failed"; return; }
+	if(blocks==NULL) { cout << "Memory Allocation Failed"; return 1; }
 	//cout << "Memory Allocated for " << +maxblocks << " blocks: " << sizeof(blockdata)*maxblocks << " bytes\n";
 	
 	for( int r=0; r<repcount; r++ ) {
@@ -778,7 +813,7 @@ void mpack() {
 	bytecount* bc = (bytecount*) malloc(sizeof(bytecount)*256);
 	if(bc==NULL) {
 		cout << "Memory Allocation Failed";
-		return;
+		return 1;
 	}
 	//cout << "Memory Allocated for bytecount: " << sizeof(bytecount)*256 << " bytes\n";
 	for( int i=0;i<256;i++ ) bc[i] = (bytecount){ (unsigned char)i, 0 };
@@ -839,7 +874,8 @@ void mpack() {
 
 	// optimize counter bits and distance bits (how to store index bytes in less bit)
 	unsigned short int	cntlist[blkcount];
-	unsigned short int	distlist[repcount];
+	unsigned short int	distlist[repcount+1];	// +1: data without repeats still reads distlist[0]
+	distlist[0] = 0;
 	
 	unsigned short int	clcount = 0;		
 	unsigned short int	dlcount = 0;		
@@ -869,7 +905,7 @@ void mpack() {
 	*/
 			
 	testdata			CNTlist[blkcount];
-	testdata			DISTlist[repcount];
+	testdata			DISTlist[repcount+1];
 	
 	unsigned short int	Clcount = 0;
 	unsigned short int	Dlcount = 0;
@@ -909,9 +945,10 @@ void mpack() {
 
 	// PASS 5 - assemble packed data ----------------------------------------------------
 
-	pdata = (char*) malloc(expsize);
-	if(!pdata) { cout << "Memory Allocation Failed"; return; }
-	memset(pdata, PAD, expsize);
+	unsigned int maxpacked = expsize*2+512;	// data that doesn't pack comes out larger
+	pdata = (char*) malloc(maxpacked);
+	if(!pdata) { cout << "Memory Allocation Failed"; return 1; }
+	memset(pdata, PAD, maxpacked);
 
 	bin = 0;
 	bout = 0;
@@ -1011,15 +1048,23 @@ void mpack() {
 	var pdl = Math.ceil( pdbit/8 );			// The length of the pack data	
 	*/	
 
-	if( force_hex || (!haveoutfile && !trying) ) hexdump( pdata, bout );	// print result as hexdump
+	if( !jsmode && (force_hex || (!haveoutfile && !trying)) ) hexdump( pdata, bout );	// print result as hexdump
 	if( v_mode ) {
 		cout << "Packed size:\t" << +bout << "B\t(" << +(bin-bout) << "B less, " << +(((float)bout/bin)*100)<< "% of the original)\n";
+	}
+	if( jsmode ) {
+		int rc = jsxsave( (unsigned char*)pdata, bout, (unsigned char*)ldata, filesize );
+		free(bc);
+		free(blocks);
+		free(pdata);
+		free(ldata);
+		return rc;
 	}
 	if( haveoutfile && !trying ) {
 		// save the packed file.
 		ofstream myFile;
 		myFile.open(outfile, ofstream::binary);
-		if( !myFile.is_open() ) { cout << "Can't write file\n"; return; }
+		if( !myFile.is_open() ) { cout << "Can't write file\n"; return 1; }
 		myFile.write(pdata, bout);
 		myFile.close();
 		if( v_mode ) cout << "Packed to file:\t" << outfile << "\n";
@@ -1042,7 +1087,7 @@ void mpack() {
 
 
 	free(ldata);
-
+	return 0;
 }
 
 void pushbit( int sbit ) {
@@ -1117,3 +1162,127 @@ unsigned short int pulldatabits( unsigned char bitdepths[], int l ) {
 	return pullnbits(actbits)+fix;
 }
 
+
+// jspackerx mode -------------------------------------------------------------------
+
+// jspackerx (https://iparigrafika.hu/jspackerx/) makes a self extracting .js file of the -t packed data:
+//
+//		/* js packed with jspackerx */ _="<base64 JSXUNPACK>&<base64 packed data>".split("&");eval(atob(_[0]));
+//
+// JSXUNPACK is its decompressor: it reads the -t format from _[1] into s, one character per byte, then evals s.
+const char* JSXUNPACK = R"JS(r=atob(_[1]);for(var J,S,P,A,C,K=function(r){s+=String.fromCharCode(r)},E=function(i){return r.charCodeAt(i||h++)},R=function(){g||(C=h++);var r=E(C)&u[g]?1:0;return g=g+1&7,r},X=function(r){for(var i=0,f=0,n=r-1;i++<r;)f+=R()*m[n--];return f},t=function(r){for(var i=r[0],f=0,n=r.length,o=1;o<n;){if(R())return X(i)+f;f+=m[i],i=r[o++]}return X(i)+f},d=function(r,f,n){for(i=0;i<r;)f[i++]=X(n)+1},s="",g=h=q=0,i=256,p=(E()*i+E())*i+E(),u=[],m=[],o=[];i>>=1;)u.push(i);for(i++;32767&i;)m.push(i),i<<=1;for(A=E(),i=0;i<A;)o[i++]=E();for(d(X(3)+1,w=[],3),d(X(3)+1,x=[],4),d(X(3)+1,y=[],4);q<p;)if(i){for(J=q+t(x);q<=J;)q++<p&&K(o[t(w)]);i=0}else for(i=R(),P=(S=q-t(y))+t(x)+4;S<P;q++)K(s.charCodeAt(S++));eval(s))JS";
+
+int jsxsave( unsigned char packed[], int count, unsigned char orig[], int origsize ) {
+	// jspackerx writes whatever comes out: check first that its decompressor gets the original back
+	if( !jsxcheck( packed, count, orig, origsize ) ) {
+		cout << "The jspackerx decompressor would not unpack this file correctly, nothing written\n";
+		return 1;
+	}
+	int high = 0, first = -1;
+	for( int i=0; i<origsize; i++ ) if( orig[i]>127 ) { if( first<0 ) first = i; high++; }
+	if( high ) cout << "Warning: " << +high << " bytes above 127 (the first at " << +first << "): the decompressor makes a character of each byte, so UTF-8 comes out garbled\n";
+
+	string js = "/* js packed with jspackerx */ _=\"" + base64( (const unsigned char*)JSXUNPACK, strlen(JSXUNPACK) )
+				+ "&" + base64( packed, count ) + "\".split(\"&\");eval(atob(_[0]));";
+
+	if( haveoutfile ) {
+		ofstream myFile;
+		myFile.open(outfile, ofstream::binary);
+		if( !myFile.is_open() ) { cout << "Can't write file\n"; return 1; }
+		myFile.write(js.data(), js.size());
+		myFile.close();
+	} else {
+		fwrite( js.data(), 1, js.size(), stdout );
+	}
+	if( v_mode ) {
+		cout << "jspackerx file:\t" << +js.size() << "B\t(" << +(((float)js.size()/origsize)*100) << "% of the original)\n";
+		if( haveoutfile ) cout << "Packed to file:\t" << outfile << "\n";
+	}
+	return 0;
+}
+
+// JSXUNPACK in C++, its limits too (2^14 is the largest bit value it has, missing LUT entries
+// read as \0): true if it unpacks packed to orig
+bool jsxcheck( unsigned char packed[], int count, unsigned char orig[], int origsize ) {
+	int		h = 0, C = 0, g = 0;	// next byte, control byte, bit in it
+	bool	bad = false;
+
+	auto E = [&]( int i ) -> int { return i<count? packed[i]: 0; };	// past the end: NaN, 0 bits
+	auto R = [&]() -> int {
+		if( g==0 ) C = h++;
+		int bit = (E(C)&bits[g])? 1: 0;
+		g = (g+1)&7;
+		return bit;
+	};
+	auto X = [&]( int r ) -> int {
+		if( r>15 ) bad = true;
+		int f = 0;
+		for( int n=r-1; n>=0; n-- ) f += R()<<n;
+		return f;
+	};
+	auto t = [&]( unsigned char d[], int l ) -> int {
+		int f = 0;
+		for( int i=0; i<l-1; i++ ) {
+			if( R() ) return X( d[i] )+f;
+			if( d[i]>14 ) bad = true;
+			f += 1<<d[i];
+		}
+		return X( d[l-1] )+f;
+	};
+
+	int p = E(h++)<<16;
+	p += E(h++)<<8;
+	p += E(h++);
+	int A = E(h++);						// 256 entries are stored as 0, which it reads as none
+	unsigned char o[256];
+	for( int i=0; i<A; i++ ) o[i] = E(h++);
+	unsigned char w[8], x[8], y[8];
+	int wl = X(3)+1;
+	for( int i=0; i<wl; i++ ) w[i] = X(3)+1;
+	int xl = X(3)+1;
+	for( int i=0; i<xl; i++ ) x[i] = X(4)+1;
+	int yl = X(3)+1;
+	for( int i=0; i<yl; i++ ) y[i] = X(4)+1;
+
+	vector<unsigned char> s;
+	s.reserve(p);
+	int q = 0;
+	bool isStream = true;
+	while( q<p && !bad ) {
+		if( isStream ) {
+			int J = q+t( x, xl );
+			while( q<=J ) {
+				if( q++<p ) {
+					int li = t( w, wl );
+					if( li>=A ) bad = true;
+					else s.push_back( o[li] );
+				}
+			}
+			isStream = false;
+		} else {
+			isStream = R();
+			int S = q-t( y, yl );
+			int P = S+t( x, xl )+4;
+			for( ; S<P && !bad; q++ ) {
+				if( S<0 || S>=(int)s.size() ) { bad = true; break; }
+				unsigned char c = s[S++];
+				s.push_back( c );
+			}
+		}
+	}
+	return !bad && (int)s.size()==origsize && memcmp( s.data(), orig, origsize )==0;
+}
+
+string base64( const unsigned char data[], int count ) {
+	const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	string out;
+	out.reserve( (count+2)/3*4 );
+	for( int i=0; i<count; i+=3 ) {
+		int n = data[i]<<16 | (i+1<count? data[i+1]<<8: 0) | (i+2<count? data[i+2]: 0);
+		out += b64[ (n>>18)&63 ];
+		out += b64[ (n>>12)&63 ];
+		out += i+1<count? b64[ (n>>6)&63 ]: '=';
+		out += i+2<count? b64[ n&63 ]: '=';
+	}
+	return out;
+}
